@@ -1,5 +1,8 @@
 ﻿using JwtAuth.Model;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -33,7 +36,43 @@ namespace JwtAuth.Controllers {
                 return BadRequest("User not found");
             }
 
-            return Ok("my crazy token");
+            if(!VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt)) {
+                return BadRequest("Wrong password");
+            }
+            var token = CreateToken(user);
+            return Ok(token);
+        }
+
+        private string CreateToken(User user) {
+            var claims = new List<Claim> {
+                new Claim(ClaimTypes.Name, user.Username)
+            };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("my secure and very very very very long Key"));
+            var cred = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
+
+            var token = new JwtSecurityToken(
+                claims: claims,
+                expires: DateTime.Now.AddDays(1),
+                signingCredentials: cred
+             );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private bool VerifyPassword(string password, byte[] passwordHash, byte[] passwordSalt) {
+            using(var hmac = new HMACSHA256(passwordSalt)) {
+                var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+                return computedHash.SequenceEqual(passwordHash);
+            }
+
+            //var hmac = new HMACSHA256(passwordSalt);
+            //try {
+            //    var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+            //    return computedHash.SequenceEqual(passwordHash);
+            //} finally {
+            //    hmac.Dispose();
+            //}
         }
     }
 }
